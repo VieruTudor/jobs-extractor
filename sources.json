@@ -1,0 +1,373 @@
+{
+  "feeds": [
+    {
+      "type": "adzuna",
+      "enabled": true,
+      "app_id_env": "ADZUNA_APP_ID",
+      "app_key_env": "ADZUNA_APP_KEY",
+      "countries": [
+        "AT",
+        "BE",
+        "DE",
+        "ES",
+        "FR",
+        "IT",
+        "NL",
+        "PL"
+      ],
+      "max_requests_per_run": 120,
+      "max_pages_per_query": 3
+    },
+    {
+      "type": "jooble",
+      "enabled": true,
+      "api_key_envs": {},
+      "domains": {},
+      "max_requests_per_run": 120,
+      "max_pages_per_query": 3
+    },
+    {
+      "type": "google_cse",
+      "enabled": true,
+      "api_key_env": "GOOGLE_CSE_API_KEY",
+      "engine_id_env": "GOOGLE_CSE_ENGINE_ID",
+      "allowed_domains": [],
+      "terms_allow_automated_access": false,
+      "max_queries_per_run": 20,
+      "max_results_per_query": 10
+    },
+    {
+      "type": "arbeitnow",
+      "enabled": true
+    },
+    {
+      "type": "himalayas",
+      "enabled": true
+    },
+    {
+      "type": "remotive",
+      "enabled": true
+    }
+  ],
+  "boards": [
+    {
+      "provider": "ashby",
+      "slug": "1password",
+      "name": "1password",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "1x",
+      "name": "1x",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "9fin",
+      "name": "9fin",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "ashby",
+      "name": "ashby",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "astronomer",
+      "name": "astronomer",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "Carwow",
+      "name": "Carwow",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "checkout.com",
+      "name": "checkout.com",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "cohere",
+      "name": "cohere",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "confluent",
+      "name": "confluent",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "deliveroo",
+      "name": "deliveroo",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "dust",
+      "name": "dust",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "elevenlabs",
+      "name": "elevenlabs",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "encord",
+      "name": "encord",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "fundingcircle",
+      "name": "fundingcircle",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "gearset",
+      "name": "gearset",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "gorgias",
+      "name": "gorgias",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "higharc",
+      "name": "higharc",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "hyperexponential",
+      "name": "hyperexponential",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "iwoca.co.uk",
+      "name": "iwoca.co.uk",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "lovable",
+      "name": "lovable",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "mistral.ai",
+      "name": "mistral.ai",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "motorway",
+      "name": "motorway",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "n8n",
+      "name": "n8n",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "notion",
+      "name": "notion",
+      "enabled": true
+    },
+    {
+      "provider": "ashby",
+      "slug": "openai",
+      "name": "openai",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "ada18",
+      "name": "Ada",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "agoda",
+      "name": "Agoda",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "airtable",
+      "name": "Airtable",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "anaplan",
+      "name": "Anaplan",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "anthropic",
+      "name": "Anthropic",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "appian",
+      "name": "Appian Corporation ",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "blockchain",
+      "name": "Blockchain.com",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "bloomreach",
+      "name": "Bloomreach",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "boxinc",
+      "name": "Box",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "canonical",
+      "name": "Canonical",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "capitalontap",
+      "name": "Capital on Tap",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "carbonchain",
+      "name": "CarbonChain",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "celigo",
+      "name": "Celigo",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "celonis",
+      "name": "Celonis",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "cloudflare",
+      "name": "Cloudflare",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "coursera",
+      "name": "Coursera",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "cribl",
+      "name": "Cribl",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "applovin",
+      "name": "AppLovin",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "diligentcorporation",
+      "name": "Diligent Corporation",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "dunnhumby",
+      "name": "dunnhumby",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "figma",
+      "name": "Figma",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "flexport",
+      "name": "Flexport",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "geotab",
+      "name": "Geotab",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "gitlab",
+      "name": "GitLab",
+      "enabled": true
+    },
+    {
+      "provider": "greenhouse",
+      "slug": "grafanalabs",
+      "name": "Grafana Labs",
+      "enabled": true
+    },
+    {
+      "provider": "lever",
+      "slug": "prima",
+      "name": "Prima",
+      "region": "eu",
+      "enabled": true
+    },
+    {
+      "provider": "lever",
+      "slug": "aleph",
+      "name": "Aleph",
+      "enabled": true
+    },
+    {
+      "provider": "lever",
+      "slug": "ae-2",
+      "name": "AE",
+      "enabled": true
+    }
+  ]
+}
