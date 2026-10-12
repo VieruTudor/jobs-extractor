@@ -15,6 +15,10 @@ python -m unittest -v
 
 `collect` downloads all enabled feeds and employer boards, updates SQLite history, then exports. `collect-boards` refreshes only the direct Greenhouse and Ashby boards. `export` reapplies your current preferences to stored active records; it may make cached-once geocoding requests for unresolved EU locations. It preserves the last collection status and events. Paths in config are relative to the config file; an alternate config can be supplied with `--config PATH`.
 
+## Go REST API
+
+Run `go run ./cmd/jobs-api` from this repository to serve the current `output/jobs.json` at `http://127.0.0.1:8000`. The API searches the current directory and its parents for `output/jobs.json`, and logs the resolved path on startup. Set `JOBS_FILE` to point directly to a different export, or `JOBS_OUTPUT_DIR` to use another directory. `JOBS_API_ADDR` changes the listen address. Routes include `GET /api/jobs`, `GET /api/health`, `GET /openapi.json`, and `/docs` for Swagger UI. If the export cannot be read, the jobs endpoint returns an error instead of an empty list.
+
 ## Preferences
 
 Edit `config.json`. Empty lists mean unrestricted; set the country to `null` to remove the country filter. The default country filter is `EU`.

@@ -39,11 +39,14 @@ type apiError struct {
 }
 
 func main() {
-	dataDir := environmentOrDefault("JOBS_OUTPUT_DIR", defaultDataDir)
+	jobsFile, err := resolveJobsFile()
+	if err != nil {
+		log.Fatalf("resolve jobs file: %v", err)
+	}
 	address := environmentOrDefault("JOBS_API_ADDR", defaultAddress)
 
 	app := server{
-		jobsFile: filepath.Join(dataDir, "jobs.json"),
+		jobsFile: jobsFile,
 	}
 	server := &http.Server{
 		Addr:              address,
@@ -51,10 +54,40 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("Jobs API listening on http://%s", address)
+	log.Printf("Jobs API listening on http://%s (data: %s)", address, jobsFile)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("start jobs API: %v", err)
 	}
+}
+
+func resolveJobsFile() (string, error) {
+	if configuredFile := strings.TrimSpace(os.Getenv("JOBS_FILE")); configuredFile != "" {
+		return filepath.Abs(configuredFile)
+	}
+
+	if configuredDir := strings.TrimSpace(os.Getenv("JOBS_OUTPUT_DIR")); configuredDir != "" {
+		return filepath.Abs(filepath.Join(configuredDir, "jobs.json"))
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("get working directory: %w", err)
+	}
+	for dir := workingDir; ; dir = filepath.Dir(dir) {
+		candidate := filepath.Join(dir, "output", "jobs.json")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("inspect %q: %w", candidate, err)
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+	}
+
+	return filepath.Abs(filepath.Join(defaultDataDir, "jobs.json"))
 }
 
 func (s server) routes() http.Handler {
@@ -102,7 +135,7 @@ func (s server) listJobs(w http.ResponseWriter, r *http.Request) {
 func (s server) loadJobs() ([]map[string]any, error) {
 	data, err := os.ReadFile(s.jobsFile)
 	if errors.Is(err, os.ErrNotExist) {
-		return []map[string]any{}, nil
+		return nil, fmt.Errorf("jobs file %q does not exist", s.jobsFile)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read %q: %w", s.jobsFile, err)
