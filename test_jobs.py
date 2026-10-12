@@ -45,6 +45,30 @@ class CollectorTests(unittest.TestCase):
             self.assertEqual(len(result), 1)
             self.assertIn("cursor=next", fetch.call_args.args[0])
 
+    def test_remoteok_feed_skips_metadata_and_normalizes_tagged_jobs(self):
+        feed = [
+            {"last_updated": 123, "legal": "Attribution required"},
+            {"id": "42", "slug": "remote-software-engineer-example-42",
+             "position": "Remote Software Engineer", "company": "Example",
+             "url": "https://remoteok.com/remote-jobs/remote-software-engineer-example-42",
+             "location": "Europe", "description": "<p>Build products</p>",
+             "date": "2026-10-08T10:00:00Z", "tags": ["dev", "python"],
+             "salary_min": 100000, "salary_max": 120000},
+        ]
+        settings = {"retries": 0, "timeout_seconds": 2}
+        with patch("job_extractor.sources.fetch", return_value=feed) as fetch:
+            rows, complete = collect("remoteok", settings, source_config={
+                "type": "remoteok", "tags": ["dev", "software"]
+            })
+        self.assertTrue(complete)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["source_id"], "42")
+        self.assertEqual(rows[0]["url"], feed[1]["url"])
+        self.assertIn("python", rows[0]["description"])
+        self.assertEqual(rows[0]["work_mode"], "remote")
+        self.assertEqual(rows[0]["compensation"]["min"], 100000)
+        self.assertIn("tags=dev%2Csoftware", fetch.call_args.args[0])
+
     def test_page_cap_is_incomplete(self):
         with patch("job_extractor.sources.fetch", return_value={"jobs": [], "nextCursor": "more"}):
             _, complete = collect("himalayas", {"max_pages": 1, "page_delay_seconds": 0, "retries": 0, "timeout_seconds": 2})
@@ -99,13 +123,16 @@ class CollectorTests(unittest.TestCase):
         with patch.dict("os.environ", {"TEST_CSE_KEY": "key", "TEST_CSE_ID": "engine"}), \
              patch("job_extractor.sources.fetch", return_value={"items": [
                  {"link": "https://jobs.example/post"}, {"link": "https://unapproved.example/post"}
-             ]}), \
+             ]}) as fetch, \
              patch("job_extractor.scraping._allowed", return_value=True), \
              patch("job_extractor.scraping._extract_page", return_value=[posting]):
-            rows, complete = collect_google_cse(source, settings, {"technologies": ["C#"]})
+            rows, complete = collect_google_cse(source, settings, {"roles": ["Developer"], "technologies": ["C#"]})
         self.assertTrue(complete)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["source"], "google_cse")
+        queries = [call.args[0] for call in fetch.call_args_list]
+        self.assertTrue(any("Developer" in query for query in queries))
+        self.assertTrue(any("C%23" in query for query in queries))
 
     def test_unchanged_and_updated_records(self):
         with tempfile.TemporaryDirectory() as directory, closing(jobs.connect(Path(directory) / "test.sqlite")) as db:

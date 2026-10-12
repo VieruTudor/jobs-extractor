@@ -173,7 +173,12 @@ def collect_google_cse(source, settings, preferences):
     api_key = os.environ[source.get("api_key_env", "GOOGLE_CSE_API_KEY")]
     engine_id = os.environ[source.get("engine_id_env", "GOOGLE_CSE_ENGINE_ID")]
     domains = [str(domain).casefold().strip(".") for domain in source.get("allowed_domains", [])]
-    terms = preferences.get("technologies") or preferences.get("roles") or []
+    terms, seen_terms = [], set()
+    for term in [*(preferences.get("roles") or []), *(preferences.get("technologies") or [])]:
+        key = str(term).strip().casefold()
+        if key and key not in seen_terms:
+            seen_terms.add(key)
+            terms.append(str(term).strip())
     max_queries = int(source.get("max_queries_per_run", 20))
     max_results = min(100, max(1, int(source.get("max_results_per_query", 10))))
     found, robots, query_count, complete = {}, {}, 0, True

@@ -172,6 +172,19 @@ def collect(kind, settings, preferences=None, source_config=None):
     if kind == "google_cse":
         from .scraping import collect_google_cse
         return collect_google_cse(source_config, settings, preferences or {})
+    if kind == "remoteok":
+        tags = source_config.get("tags") or ["dev"]
+        url = "https://remoteok.com/api?" + urlencode({"tags": ",".join(tags)})
+        data = fetch(url, settings)
+        if not isinstance(data, list):
+            raise ValueError("Invalid Remote OK job feed")
+        # The first array item contains feed-level legal metadata, not a job.
+        rows = [row for row in data if isinstance(row, dict) and (row.get("id") or row.get("slug"))]
+        unique = {}
+        for row in rows:
+            job = normalize("remoteok", row)
+            unique[job["source_id"]] = job
+        return list(unique.values()), True
     if kind == "himalayas" and preferences and str(preferences.get("country_filter") or "").casefold() == "eu":
         targeted = collect_himalayas_search(settings, preferences)
         if targeted is not None:

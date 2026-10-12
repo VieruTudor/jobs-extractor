@@ -47,6 +47,11 @@
     {
       "type": "remotive",
       "enabled": true
+    },
+    {
+      "type": "remoteok",
+      "enabled": true,
+      "tags": ["dev", "engineer", "software"]
     }
   ],
   "boards": [

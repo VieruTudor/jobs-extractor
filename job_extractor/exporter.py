@@ -70,9 +70,25 @@ def export(db, config, base, report):
     for job in jobs:
         url = job["url"] if urlsplit(job["url"]).scheme in ("http", "https") else "#"
         source_links = ", ".join(f"<a href='{esc(s['url'], quote=True)}'>{esc(s['source'])}</a>" for s in job["sources"] if urlsplit(s["url"]).scheme in ("http", "https"))
-        rows.append(f"<tr><td>{esc(job['assessment']['status'])}</td><td><a href='{esc(url, quote=True)}'>{esc(job['title'])}</a></td><td>{esc(job['company'])}</td><td>{esc(job['location'])}</td><td>{source_links}</td><td>{esc('; '.join(job['assessment']['reasons']))}</td></tr>")
+        status = job["assessment"]["status"]
+        badge = f"<span class='status-badge status-{esc(status, quote=True)}'>{esc(status)}</span>"
+        rows.append(f"<tr><td>{badge}</td><td><a href='{esc(url, quote=True)}'>{esc(job['title'])}</a></td><td>{esc(job['company'])}</td><td>{esc(job['location'])}</td><td>{source_links}</td><td>{esc('; '.join(job['assessment']['reasons']))}</td></tr>")
     headers = ("Status", "Job", "Company", "Location", "Source", "Reasons")
     head = "<thead><tr>" + "".join(f"<th scope='col'>{esc(label)}</th>" for label in headers) + "</tr><tr class='filters'>" + "".join(f"<th><input type='search' data-column='{i}' aria-label='Filter {esc(label, quote=True)}' placeholder='Filter {esc(label, quote=True)}'></th>" for i, label in enumerate(headers)) + "</tr></thead>"
     script = "<script>const filters=[...document.querySelectorAll('.filters input')];const rows=[...document.querySelectorAll('tbody tr')];function applyFilters(){for(const row of rows){const cells=[...row.cells];row.hidden=!filters.every(input=>!input.value||cells[Number(input.dataset.column)].textContent.toLocaleLowerCase().includes(input.value.trim().toLocaleLowerCase()))}}filters.forEach(input=>input.addEventListener('input',applyFilters));</script>"
-    atomic(output / "jobs.html", "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Job listings</title><style>body{font:15px system-ui;margin:24px}table{border-collapse:collapse;width:100%}td,th{padding:8px;border:1px solid #ccc;text-align:left;vertical-align:top}thead{position:sticky;top:0;background:white}input{box-sizing:border-box;max-width:100%;width:100%;padding:6px}tr[hidden]{display:none}</style><h1>Job listings</h1><p>Generated " + esc(report["finished_at"]) + " — excluded listings are omitted. See run-status.json for source health.</p><p>Sources: <a href='https://www.arbeitnow.com'>Arbeitnow</a>, <a href='https://himalayas.app'>Himalayas</a>, <a href='https://remotive.com'>Remotive</a>.</p><p>Location geocoding: <a href='https://open-meteo.com/en/docs/geocoding-api'>Open-Meteo</a> using GeoNames data (CC BY 4.0).</p><table>" + head + "<tbody>" + "".join(rows) + "</tbody></table>" + script + "</html>")
+    stylesheet = (Path(__file__).parent / "assets" / "jobs.css").read_text(encoding="utf-8")
+    document = (
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Job listings</title><style>" + stylesheet + "</style></head><body>"
+        "<main class='page-shell'><header class='page-header'><div><p class='eyebrow'>DAILY JOB COLLECTOR</p>"
+        "<h1>Job listings</h1><p class='subtitle'>" + str(len(jobs)) + " active listings in this view</p></div>"
+        "<div class='generated'>Updated<br><strong>" + esc(report["finished_at"]) + "</strong></div></header>"
+        "<p class='note'>Excluded listings are omitted. See <code>run-status.json</code> for source health.</p>"
+        "<section class='table-card' aria-label='Job listings'><div class='table-scroll'><table>" + head +
+        "<tbody>" + "".join(rows) + "</tbody></table></div></section>"
+        "<footer>Location checks use <a href='https://open-meteo.com/en/docs/geocoding-api'>Open-Meteo</a> and GeoNames data (CC BY 4.0)."
+        "</footer></main>" + script + "</body></html>"
+    )
+    atomic(output / "jobs.html", document)
     return len(jobs)

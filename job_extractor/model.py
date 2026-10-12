@@ -158,6 +158,21 @@ def normalize(kind, row):
         description, published = row.get("description", ""), row.get("publication_date")
         remote, employment = True, [row.get("job_type", "")]
         restrictions, salary = ([location] if location else []), {"text": row.get("salary")}
+    elif kind == "remoteok":
+        ident = str(row.get("id") or row.get("slug") or row.get("url") or "")
+        title, company = row.get("position", ""), row.get("company", "")
+        url, location = row.get("url") or row.get("apply_url", ""), row.get("location", "")
+        tags = row.get("tags") or []
+        description = " ".join([str(row.get("description", "")), " ".join(map(str, tags))]).strip()
+        published = row.get("date") or row.get("epoch")
+        remote, employment = True, []
+        restrictions = [location] if location else []
+        salary_min, salary_max = row.get("salary_min"), row.get("salary_max")
+        salary = {"min": salary_min if salary_min not in (None, 0, "0") else None,
+                  "max": salary_max if salary_max not in (None, 0, "0") else None,
+                  "currency": row.get("salary_currency") or row.get("currency") or ""}
+        if not ident or not title or not url:
+            raise ValueError("Remote OK listing is missing an id, title, or job URL")
     elif kind == "adzuna":
         ident, title = str(row["id"]), row["title"]
         company = (row.get("company") or {}).get("display_name", "")
