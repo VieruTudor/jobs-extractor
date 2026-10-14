@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -123,11 +124,203 @@ func (s server) routes() http.Handler {
 	router.Get("/api/jobs", s.listJobs)
 	router.Get("/api/collector", s.collectorStatus)
 	router.Post("/api/collector/runs", s.startCollection)
+	router.Get("/api/config", s.getConfig)
+	router.Put("/api/config", s.putConfig)
+	router.Get("/api/sources", s.getSources)
+	router.Put("/api/sources", s.putSources)
 	router.Get("/openapi.json", s.openapi)
 	router.Get("/docs", s.docs)
 	router.Get("/docs/", s.docs)
 
 	return router
+}
+
+func (s *server) getConfig(w http.ResponseWriter, _ *http.Request) {
+	data, err := os.ReadFile(s.config)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "unable to read config")
+		return
+	}
+	writeJSONBytes(w, http.StatusOK, data)
+}
+
+func (s *server) putConfig(w http.ResponseWriter, r *http.Request) {
+	data, err := readRequestJSON(w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var settings collector.Settings
+	if err := json.Unmarshal(data, &settings); err != nil || settings.Preferences == nil || settings.Collection == nil || settings.SourcesFile == "" || settings.Database == "" || settings.OutputDir == "" {
+		writeError(w, http.StatusBadRequest, "config must be valid JSON with preferences, collection, sources_file, database, and output_directory")
+		return
+	}
+	if err := validateConfigPaths(settings); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.writeConfigFile(s.config, data); err != nil {
+		if err.Error() == "collector is running" {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		log.Printf("write config: %v", err)
+		writeError(w, http.StatusInternalServerError, "unable to save config")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (s *server) getSources(w http.ResponseWriter, _ *http.Request) {
+	path, err := s.sourcesPath()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "unable to resolve sources config")
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "unable to read sources config")
+		return
+	}
+	writeJSONBytes(w, http.StatusOK, data)
+}
+
+func (s *server) putSources(w http.ResponseWriter, r *http.Request) {
+	data, err := readRequestJSON(w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var sources collector.SourceList
+	if err := json.Unmarshal(data, &sources); err != nil || sources.Feeds == nil || sources.Boards == nil {
+		writeError(w, http.StatusBadRequest, "sources must be valid JSON with feeds and boards arrays")
+		return
+	}
+	if err := validateSources(sources); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	path, err := s.sourcesPath()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "unable to resolve sources config")
+		return
+	}
+	if err := s.writeConfigFile(path, data); err != nil {
+		if err.Error() == "collector is running" {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		log.Printf("write sources config: %v", err)
+		writeError(w, http.StatusInternalServerError, "unable to save sources config")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (s *server) sourcesPath() (string, error) {
+	settings, base, err := collector.LoadSettings(s.config)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Clean(filepath.Join(base, settings.SourcesFile))
+	relative, err := filepath.Rel(base, path)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return "", errors.New("sources_file must be inside the config directory")
+	}
+	return path, nil
+}
+
+func (s *server) writeConfigFile(path string, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return errors.New("collector is running")
+	}
+	var formatted bytes.Buffer
+	if err := json.Indent(&formatted, data, "", "  "); err != nil {
+		return err
+	}
+	formatted.WriteByte('\n')
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(dir, ".config-*.tmp")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if _, err := temporary.Write(formatted.Bytes()); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, path)
+}
+
+func readRequestJSON(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	defer r.Body.Close()
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 2<<20))
+	if err != nil {
+		return nil, errors.New("request body must be valid JSON under 2 MiB")
+	}
+	if !json.Valid(data) {
+		return nil, errors.New("request body must be valid JSON")
+	}
+	return data, nil
+}
+
+func validateConfigPaths(settings collector.Settings) error {
+	for _, value := range []string{settings.SourcesFile, settings.Database, settings.OutputDir} {
+		if filepath.IsAbs(value) {
+			return errors.New("config paths must be relative")
+		}
+		cleaned := filepath.Clean(value)
+		if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+			return errors.New("config paths must stay inside the config directory")
+		}
+	}
+	return nil
+}
+
+func validateSources(sources collector.SourceList) error {
+	seen := map[string]bool{}
+	for _, feed := range sources.Feeds {
+		typeName := strings.TrimSpace(stringValue(feed["type"]))
+		if typeName == "" {
+			return errors.New("every feed must define a type")
+		}
+		key := "feed:" + typeName
+		if seen[key] {
+			return fmt.Errorf("duplicate feed type %q", typeName)
+		}
+		seen[key] = true
+	}
+	for _, board := range sources.Boards {
+		provider, slug := strings.TrimSpace(stringValue(board["provider"])), strings.TrimSpace(stringValue(board["slug"]))
+		if provider == "" || slug == "" {
+			return errors.New("every board must define provider and slug")
+		}
+		key := "board:" + strings.ToLower(provider) + ":" + strings.ToLower(slug)
+		if seen[key] {
+			return fmt.Errorf("duplicate board %s:%s", provider, slug)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+func writeJSONBytes(w http.ResponseWriter, status int, data []byte) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(data)
 }
 
 func (s *server) collectorStatus(w http.ResponseWriter, _ *http.Request) {
@@ -512,6 +705,28 @@ const openAPISpec = `{
           "400": {"description": "Invalid request."},
           "409": {"description": "A collector run is already in progress."}
         }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "summary": "Read collector configuration",
+        "responses": {"200": {"description": "Current preferences and collector settings."}}
+      },
+      "put": {
+        "summary": "Replace collector configuration",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object"}}}},
+        "responses": {"200": {"description": "Configuration saved."}, "400": {"description": "Invalid configuration."}, "409": {"description": "Collector is running."}}
+      }
+    },
+    "/api/sources": {
+      "get": {
+        "summary": "Read configured feeds and boards",
+        "responses": {"200": {"description": "Current sources configuration."}}
+      },
+      "put": {
+        "summary": "Replace configured feeds and boards",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["feeds", "boards"], "properties": {"feeds": {"type": "array", "items": {"type": "object"}}, "boards": {"type": "array", "items": {"type": "object"}}}}}}},
+        "responses": {"200": {"description": "Sources saved."}, "400": {"description": "Invalid sources configuration."}, "409": {"description": "Collector is running."}}
       }
     }
   },

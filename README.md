@@ -33,6 +33,8 @@ The Go collector supports the configured Arbeitnow, Himalayas, Remotive, Remote 
 - `GET /api/jobs` — pagination via `limit` and `offset`; exact filters for `status`, `source`, `company`, `location`, and `work_mode`; free-text `q` over title, company, description, and location.
 - `GET /api/collector` — current run state and latest collector report.
 - `POST /api/collector/runs` — start a background run. The optional JSON body is `{"command":"collect"}` or `{"command":"collect-boards","boards":["ashby:1password"]}`. Poll `GET /api/collector` for completion. The endpoint returns `409 Conflict` if a run is already active.
+- `GET` and `PUT /api/config` — read or replace collector preferences and settings. `PUT` accepts the complete `config.json` document.
+- `GET` and `PUT /api/sources` — read or replace configured feeds and employer boards. `PUT` accepts the complete `sources.json` document.
 - `GET /openapi.json`
 - `GET /docs` — Swagger UI.
 
