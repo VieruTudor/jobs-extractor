@@ -4,16 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"jobs-listing-extractor/internal/collector"
 )
 
 const (
@@ -25,12 +28,16 @@ const (
 
 type server struct {
 	jobsFile string
+	config   string
+	mu       sync.Mutex
+	running  bool
+	lastRun  map[string]any
 }
 
 type jobPage struct {
-	Total  int            `json:"total"`
-	Limit  int            `json:"limit"`
-	Offset int            `json:"offset"`
+	Total  int              `json:"total"`
+	Limit  int              `json:"limit"`
+	Offset int              `json:"offset"`
 	Jobs   []map[string]any `json:"jobs"`
 }
 
@@ -39,6 +46,17 @@ type apiError struct {
 }
 
 func main() {
+	options, err := collector.ParseOptions(os.Args[1:])
+	if err != nil {
+		log.Fatal(err)
+	}
+	if options.Command != "serve" {
+		if err := collector.Run(options); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	jobsFile, err := resolveJobsFile()
 	if err != nil {
 		log.Fatalf("resolve jobs file: %v", err)
@@ -47,6 +65,7 @@ func main() {
 
 	app := server{
 		jobsFile: jobsFile,
+		config:   collector.DefaultConfigPath(),
 	}
 	server := &http.Server{
 		Addr:              address,
@@ -102,11 +121,112 @@ func (s server) routes() http.Handler {
 
 	router.Get("/api/health", s.health)
 	router.Get("/api/jobs", s.listJobs)
+	router.Get("/api/collector", s.collectorStatus)
+	router.Post("/api/collector/runs", s.startCollection)
 	router.Get("/openapi.json", s.openapi)
 	router.Get("/docs", s.docs)
 	router.Get("/docs/", s.docs)
 
 	return router
+}
+
+func (s *server) collectorStatus(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	running := s.running
+	lastRun := s.lastRun
+	s.mu.Unlock()
+
+	if lastRun == nil {
+		if report, err := s.readCollectorReport(); err == nil {
+			lastRun = report
+		} else if !errors.Is(err, os.ErrNotExist) {
+			log.Printf("read collector report: %v", err)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"running": running, "last_run": lastRun})
+}
+
+func (s *server) startCollection(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Command string   `json:"command"`
+		Boards  []string `json:"boards,omitempty"`
+	}
+	if r.Body != nil {
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, "invalid JSON request body")
+			return
+		}
+	}
+	if request.Command == "" {
+		request.Command = "collect"
+	}
+	if request.Command != "collect" && request.Command != "collect-boards" {
+		writeError(w, http.StatusBadRequest, "command must be collect or collect-boards")
+		return
+	}
+	if request.Command == "collect" && len(request.Boards) > 0 {
+		writeError(w, http.StatusBadRequest, "boards can only be used with collect-boards")
+		return
+	}
+
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		writeError(w, http.StatusConflict, "a collector run is already in progress")
+		return
+	}
+	s.running = true
+	s.lastRun = map[string]any{"command": request.Command, "started_at": time.Now().UTC().Format(time.RFC3339), "status": "running"}
+	s.mu.Unlock()
+
+	options := collector.Options{Command: request.Command, Config: s.config, Boards: request.Boards}
+	go s.runCollection(options)
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "running", "command": request.Command})
+}
+
+func (s *server) runCollection(options collector.Options) {
+	err := collector.Run(options)
+	report, reportErr := s.readCollectorReport()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.running = false
+	if reportErr == nil {
+		s.lastRun = report
+		if err != nil {
+			s.lastRun["error"] = err.Error()
+		}
+		return
+	}
+	finished := map[string]any{"command": options.Command, "finished_at": time.Now().UTC().Format(time.RFC3339)}
+	if err != nil {
+		finished["status"] = "failed"
+		finished["error"] = err.Error()
+	} else {
+		finished["status"] = "ok"
+	}
+	s.lastRun = finished
+}
+
+func (s *server) readCollectorReport() (map[string]any, error) {
+	settings, base, err := collector.LoadSettings(s.config)
+	if err != nil {
+		return nil, err
+	}
+	return readJSONFile(filepath.Join(base, settings.OutputDir, "run-status.json"))
+}
+
+func readJSONFile(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var value map[string]any
+	if err := json.Unmarshal(data, &value); err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 func (s server) health(w http.ResponseWriter, _ *http.Request) {
@@ -367,6 +487,30 @@ const openAPISpec = `{
           },
           "400": { "description": "Invalid pagination parameters." },
           "500": { "description": "Unable to read the job export." }
+        }
+      }
+    }
+    ,"/api/collector": {
+      "get": {
+        "summary": "Get collector status",
+        "responses": {"200": {"description": "Current execution state and latest run report."}}
+      }
+    },
+    "/api/collector/runs": {
+      "post": {
+        "summary": "Start a collector run",
+        "description": "Runs the collector in the background. Poll /api/collector for status.",
+        "requestBody": {
+          "required": false,
+          "content": {"application/json": {"schema": {"type": "object", "properties": {
+            "command": {"type": "string", "enum": ["collect", "collect-boards"], "default": "collect"},
+            "boards": {"type": "array", "items": {"type": "string", "description": "provider:slug"}}
+          }}}}
+        },
+        "responses": {
+          "202": {"description": "Collector run accepted."},
+          "400": {"description": "Invalid request."},
+          "409": {"description": "A collector run is already in progress."}
         }
       }
     }
